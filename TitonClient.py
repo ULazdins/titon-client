@@ -1,8 +1,8 @@
 import asyncio
 import logging
 
-from helpers import get_symbol_hash
-from TitonHandshake import TitonHandshake
+from .helpers import get_symbol_hash
+from .TitonHandshake import TitonHandshake
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -12,12 +12,21 @@ class TitonClient:
     callbacks = []
     my_mac = "12-34-56-78-12-34"
     is_connected = False
+    is_connecting = False
+    connecting_callbacks = []
 
     def __init__(self, hrv_mac):
         self.hrv_mac = hrv_mac
 
     async def connect(self):
         _LOGGER.debug("-- connecting")
+
+        if self.is_connecting:
+            future = asyncio.Future()
+            self.connecting_callbacks.append(future)
+            return future
+
+        self.is_connecting = True
         self.reader, self.writer = await asyncio.open_connection(
             "app.manageiaq.com", 6275
         )
@@ -29,7 +38,11 @@ class TitonClient:
         handhske = TitonHandshake(self)
         await handhske.perform()
         _LOGGER.debug("-- connected\n")
+        self.is_connecting = False
         self.is_connected = True
+
+        for x in self.connecting_callbacks:
+            x.set_result(True)
 
     def handle_future_exception(self, future):
         exception = future.exception()

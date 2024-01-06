@@ -1,6 +1,6 @@
 import logging
 
-from helpers import get_symbol_hash, get_after_last_pipe, split_into_bits
+from .helpers import get_symbol_hash, get_after_last_pipe, split_into_bits
 
 
 _LOGGER = logging.getLogger(__name__)

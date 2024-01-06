@@ -1,12 +1,14 @@
 import logging
 
-from helpers import get_symbol_hash, get_after_last_pipe, split_into_bits
+from .helpers import get_symbol_hash, get_after_last_pipe, split_into_bits
 
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class TitonFanSpeed:
+    update_callbacks = []
+
     def __init__(self, client):
         self.client = client
         self.value = None
@@ -29,13 +31,15 @@ class TitonFanSpeed:
 
         bits1 = split_into_bits(int(byte1, 16))
 
-        self.value = 0
+        value = 0
         for x in range(0, 4):
             if bits1[x] != 0:
-                self.value = x + 1
+                value = x + 1
                 break
 
-        return self.value
+        self.set_value(value)
+
+        return value
 
     async def set_to(self, value):
         if value < 0 or value > 4:
@@ -52,4 +56,17 @@ class TitonFanSpeed:
         payload = get_after_last_pipe(response)
         payload = payload.removeprefix("<stx>").removesuffix("<etx>;")
 
-        return payload == "F<ack>"
+        success = payload == "F<ack>"
+
+        if success:
+            self.set_value(value)
+
+        return success
+
+    def set_value(self, value):
+        notify_observers = self.value != value
+        self.value = value
+
+        if notify_observers:
+            for callback in self.update_callbacks:
+                callback()

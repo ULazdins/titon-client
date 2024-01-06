@@ -1,4 +1,4 @@
-from helpers import get_symbol_hash, get_after_last_pipe
+from .helpers import get_symbol_hash, get_after_last_pipe
 
 
 class TitonKitchenTimer:

@@ -6,6 +6,7 @@ import aioconsole  # 3rd party dep
 from TitonClient import TitonClient
 from TitonGeneralInfo import TitonGeneralInfo
 from TitonKitchenTimer import TitonKitchenTimer
+from TitonFanSpeed import TitonFanSpeed
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -18,6 +19,7 @@ logging.basicConfig(
 async def main(client):
     kitchen_request = TitonKitchenTimer(client)
     info_request = TitonGeneralInfo(client)
+    fan_request = TitonFanSpeed(client)
 
     while True:
         print("\n")
@@ -43,8 +45,24 @@ async def main(client):
                 print(f"Kitchen timer is set to {value}")
             else:
                 print("Setting timer failed")
+        elif user_input == "fan":
+            response = await fan_request.perform()
+
+            print(f"Fan speed is set to {response}")
+        elif user_input == "set fan":
+            value = await aioconsole.ainput("Enter value: ")
+            value = int(value)
+
+            response = await fan_request.set_to(value)
+
+            if response:
+                print(f"Fan speed is set to {value}")
+            else:
+                print("Setting fan speed failed")
         elif user_input == "info":
-            response = await info_request.perform()
+            await info_request.perform()
+
+            print(f"Fan is set to {info_request.speed}")
         else:
             await client.send_dat_message(user_input)
 

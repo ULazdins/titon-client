@@ -2,6 +2,9 @@ from .helpers import get_symbol_hash, get_after_last_pipe
 
 
 class TitonKitchenTimer:
+    update_callbacks = []
+    value = None
+
     def __init__(self, client):
         self.client = client
 
@@ -19,7 +22,7 @@ class TitonKitchenTimer:
 
         byte1 = payload[2:5]
 
-        self.value = int(byte1, 10)
+        self.set_value(int(byte1, 10))
 
         return self.value
 
@@ -38,4 +41,17 @@ class TitonKitchenTimer:
         payload = get_after_last_pipe(response)
         payload = payload.removeprefix("<stx>").removesuffix("<etx>;")
 
-        return payload == "S<ack>"
+        success = payload == "S<ack>"
+
+        if success:
+            self.set_value(value)
+
+        return success
+
+    def set_value(self, value):
+        notify_observers = self.value != value
+        self.value = value
+
+        if notify_observers:
+            for callback in self.update_callbacks:
+                callback()

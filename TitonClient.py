@@ -21,6 +21,10 @@ class TitonClient:
     async def connect(self):
         _LOGGER.debug("-- connecting")
 
+        if self.is_connected:
+            _LOGGER.debug("-- connected\n")
+            return
+
         if self.is_connecting:
             future = asyncio.Future()
             self.connecting_callbacks.append(future)
@@ -78,7 +82,12 @@ class TitonClient:
                 writer.write(message.encode())
                 await writer.drain()
             except IndexError:
-                await asyncio.sleep(0.1)  # Avoid blocking the event loop
+                pass
+            except Exception as e:
+                _LOGGER.error(f"Write failed with {e}")
+
+            # Let the loop breathe
+            await asyncio.sleep(0.1)
 
     def get_full_message(self, msg):
         payload = f"{msg}{ '%03d' % get_symbol_hash(msg) }"

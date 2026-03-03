@@ -8,15 +8,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class TitonClient:
-    messages = []
-    callbacks = []
-    my_mac = "12-34-56-78-12-34"
-    is_connected = False
-    is_connecting = False
-    connecting_callbacks = []
-
     def __init__(self, hrv_mac):
         self.hrv_mac = hrv_mac
+        self.messages = []
+        self.callbacks = []
+        self.my_mac = "12-34-56-78-12-34"
+        self.is_connected = False
+        self.is_connecting = False
+        self.connecting_callbacks = []
 
     async def connect(self):
         _LOGGER.debug("-- connecting")
@@ -46,12 +45,17 @@ class TitonClient:
             await handhske.perform()
             _LOGGER.debug("-- connected\n")
 
-            # A success
+            # A success: update state before touching callbacks
             self.is_connecting = False
             self.is_connected = True
 
-            for x in self.connecting_callbacks:
-                x.set_result(True)
+            # resolve any waiting callers, but don't let one bad future
+            # crash the whole connect() call
+            for x in list(self.connecting_callbacks):
+                try:
+                    x.set_result(True)
+                except Exception as e:
+                    _LOGGER.debug("error resolving callback: %s", e)
             self.connecting_callbacks = []
 
         except (BaseException, ValueError) as e:
@@ -107,7 +111,7 @@ class TitonClient:
             await asyncio.sleep(0.1)
 
     def get_full_message(self, msg):
-        payload = f"{msg}{ '%03d' % get_symbol_hash(msg) }"
+        payload = f"{msg}{'%03d' % get_symbol_hash(msg)}"
         return f":DAT|{self.hrv_mac}|{self.my_mac}|<stx>{payload}<etx>;"
 
     async def send_request_response(self, request, check_if_wants_to_handle_response):

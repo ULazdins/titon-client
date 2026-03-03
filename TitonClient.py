@@ -26,27 +26,44 @@ class TitonClient:
             return
 
         if self.is_connecting:
+            _LOGGER.debug("-- already connecting; reusing existing process\n")
             future = asyncio.Future()
             self.connecting_callbacks.append(future)
             return future
 
         self.is_connecting = True
-        self.reader, self.writer = await asyncio.open_connection(
-            "app.manageiaq.com", 6275
-        )
 
-        reader_task = asyncio.ensure_future(self.receive_messages_loop(self.reader))
-        asyncio.ensure_future(self.send_messages_loop(self.writer))
-        reader_task.add_done_callback(self.handle_future_exception)
+        try:
+            self.reader, self.writer = await asyncio.open_connection(
+                "app.manageiaq.com", 6275
+            )
 
-        handhske = TitonHandshake(self)
-        await handhske.perform()
-        _LOGGER.debug("-- connected\n")
-        self.is_connecting = False
-        self.is_connected = True
+            reader_task = asyncio.ensure_future(self.receive_messages_loop(self.reader))
+            asyncio.ensure_future(self.send_messages_loop(self.writer))
+            reader_task.add_done_callback(self.handle_future_exception)
 
-        for x in self.connecting_callbacks:
-            x.set_result(True)
+            handhske = TitonHandshake(self)
+            await handhske.perform()
+            _LOGGER.debug("-- connected\n")
+
+            # A success
+            self.is_connecting = False
+            self.is_connected = True
+
+            for x in self.connecting_callbacks:
+                x.set_result(True)
+            self.connecting_callbacks = []
+
+        except (BaseException, ValueError) as e:
+            _LOGGER.debug("-- connection failed\n")
+
+            # A failure
+            self.is_connecting = False
+            self.is_connected = False
+
+            for x in self.connecting_callbacks:
+                x.set_exception(e)
+            self.connecting_callbacks = []
 
     def handle_future_exception(self, future):
         exception = future.exception()
@@ -114,6 +131,8 @@ class TitonClient:
             if not future.done():
                 _LOGGER.debug("- handling timeout")
                 self.callbacks.remove(callback)
+
+                self.is_connected = False
 
                 future.set_exception(ValueError("Timeout"))
 

@@ -42,26 +42,34 @@ class TitonFanSpeed:
         return value
 
     async def set_to(self, value):
-        if value < 0 or value > 4:
-            return False
+        try:
+            if value < 0 or value > 4:
+                return False
 
-        message = self.client.get_full_message(f"F{ '%d' % value }")
-        response_prefix = f":DAT|{self.client.hrv_mac}|{self.client.my_mac}|PS|<stx>F"
+            message = self.client.get_full_message(f"F{ '%d' % value }")
+            response_prefix = (
+                f":DAT|{self.client.hrv_mac}|{self.client.my_mac}|PS|<stx>F"
+            )
 
-        response = await self.client.send_request_response(
-            message,
-            lambda x: x.startswith(response_prefix),
-        )
+            if not self.client.is_connected:
+                await self.client.connect()
 
-        payload = get_after_last_pipe(response)
-        payload = payload.removeprefix("<stx>").removesuffix("<etx>;")
+            response = await self.client.send_request_response(
+                message,
+                lambda x: x.startswith(response_prefix),
+            )
 
-        success = payload == "F<ack>"
+            payload = get_after_last_pipe(response)
+            payload = payload.removeprefix("<stx>").removesuffix("<etx>;")
 
-        if success:
-            self.set_value(value)
+            success = payload == "F<ack>"
 
-        return success
+            if success:
+                self.set_value(value)
+
+            return success
+        except Exception as e:
+            _LOGGER.exception(f"Failed to set fan speed ${e}")
 
     def set_value(self, value):
         notify_observers = self.value != value

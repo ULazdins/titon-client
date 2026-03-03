@@ -10,7 +10,7 @@ class TitonGeneralInfo:
     def __init__(self, client):
         self.client = client
 
-        self.message = f":DAT|{self.client.hrv_mac}|{self.client.my_mac}|<stx>L{ '%03d' % get_symbol_hash('L') }<etx>;"
+        self.message = f":DAT|{self.client.hrv_mac}|{self.client.my_mac}|<stx>L{'%03d' % get_symbol_hash('L')}<etx>;"
         self.response_prefix = (
             f":DAT|{self.client.hrv_mac}|{self.client.my_mac}|PS|<stx>L"
         )

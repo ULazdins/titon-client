@@ -32,67 +32,86 @@ class TitonClient:
 
         self.is_connecting = True
 
-        try:
-            self.reader, self.writer = await asyncio.open_connection(
-                "app.manageiaq.com", 6275
-            )
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                self.reader, self.writer = await asyncio.open_connection(
+                    "app.manageiaq.com", 6275
+                )
 
-            reader_task = asyncio.ensure_future(self.receive_messages_loop(self.reader))
-            asyncio.ensure_future(self.send_messages_loop(self.writer))
-            reader_task.add_done_callback(self.handle_future_exception)
+                reader_task = asyncio.ensure_future(
+                    self.receive_messages_loop(self.reader)
+                )
+                asyncio.ensure_future(self.send_messages_loop(self.writer))
+                reader_task.add_done_callback(self.handle_future_exception)
 
-            handhske = TitonHandshake(self)
-            await handhske.perform()
-            _LOGGER.debug("-- connected\n")
+                handhske = TitonHandshake(self)
+                await handhske.perform()
+                _LOGGER.debug("-- connected\n")
 
-            # A success: update state before touching callbacks
-            self.is_connecting = False
-            self.is_connected = True
+                # A success: update state before touching callbacks
+                self.is_connecting = False
+                self.is_connected = True
 
-            # resolve any waiting callers, but don't let one bad future
-            # crash the whole connect() call
-            for x in list(self.connecting_callbacks):
-                try:
-                    x.set_result(True)
-                except Exception as e:
-                    _LOGGER.debug("error resolving callback: %s", e)
-            self.connecting_callbacks = []
+                # resolve any waiting callers, but don't let one bad future
+                # crash the whole connect() call
+                for x in list(self.connecting_callbacks):
+                    try:
+                        x.set_result(True)
+                    except Exception as e:
+                        _LOGGER.debug("error resolving callback: %s", e)
+                self.connecting_callbacks = []
+                return
 
-        except (BaseException, ValueError) as e:
-            _LOGGER.debug("-- connection failed\n")
+            except (BaseException, ValueError) as e:
+                _LOGGER.debug(f"-- connection attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    wait_time = (
+                        2**attempt
+                    ) * 5  # Exponential backoff: 5, 10, 20 seconds
+                    _LOGGER.debug(f"Retrying in {wait_time} seconds...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    _LOGGER.debug("-- all connection attempts failed\n")
 
-            # A failure
-            self.is_connecting = False
-            self.is_connected = False
+                    # A failure
+                    self.is_connecting = False
+                    self.is_connected = False
 
-            for x in self.connecting_callbacks:
-                x.set_exception(e)
-            self.connecting_callbacks = []
+                    for x in self.connecting_callbacks:
+                        x.set_exception(e)
+                    self.connecting_callbacks = []
 
     def handle_future_exception(self, future):
         exception = future.exception()
         if exception:
-            _LOGGER.debug(f"An exception occurred: {exception}")
-
+            _LOGGER.error(f"An exception occurred in task: {exception}")
             self.disconnect()
 
     def disconnect(self):
-        self.writer.close()
-
+        if hasattr(self, "writer") and self.writer:
+            self.writer.close()
         self.is_connected = False
         _LOGGER.debug("-- disconnected")
 
     async def receive_messages_loop(self, reader):
-        while True:
-            data = await reader.readuntil(b";")
-            if not data:
-                break
+        try:
+            while True:
+                data = await reader.readuntil(b";")
+                if not data:
+                    break
 
-            string = data.decode()
-            _LOGGER.debug(f"<<< {string}")
+                string = data.decode()
+                _LOGGER.debug(f"<<< {string}")
 
-            for callback in self.callbacks:
-                callback(string)
+                for callback in self.callbacks:
+                    callback(string)
+        except (asyncio.CancelledError, ConnectionError, OSError) as e:
+            _LOGGER.error(f"Connection lost in receive loop: {e}")
+            self.disconnect()
+        except Exception as e:
+            _LOGGER.error(f"Unexpected error in receive loop: {e}")
+            self.disconnect()
 
     async def send_messages_loop(self, writer):
         while True:
@@ -104,8 +123,14 @@ class TitonClient:
                 await writer.drain()
             except IndexError:
                 pass
-            except Exception as e:
+            except (ConnectionError, OSError) as e:
                 _LOGGER.error(f"Write failed with {e}")
+                self.disconnect()
+                break
+            except Exception as e:
+                _LOGGER.error(f"Unexpected error in send loop: {e}")
+                self.disconnect()
+                break
 
             # Let the loop breathe
             await asyncio.sleep(0.1)
@@ -130,7 +155,7 @@ class TitonClient:
 
         # Timeout handling
         async def schedule_timeout_job():
-            await asyncio.sleep(5)
+            await asyncio.sleep(15)
 
             if not future.done():
                 _LOGGER.debug("- handling timeout")

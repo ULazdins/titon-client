@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "titon"
+version = "0.2.0"
+description = "Async client for Titon Aura-T heat recovery ventilation units"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Ugis Lazdins" }]
+keywords = ["titon", "aura-t", "hrv", "ventilation", "home-assistant"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+]
+dependencies = []
+
+[project.optional-dependencies]
+cli = ["aioconsole>=0.7"]
+
+[project.urls]
+Homepage = "https://github.com/ULazdins/titon-client"
+Issues = "https://github.com/ULazdins/titon-client/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/titon"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/titon", "docs", "README.md", "LICENSE"]
